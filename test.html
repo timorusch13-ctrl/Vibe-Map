@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>VibeMap - Satellit & Status</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+        :root {
+            --m3-primary: #D0BCFF;
+            --m3-on-primary: #381E72;
+            --m3-surface: #1C1B1F;
+            --m3-surface-variant: #49454F;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--m3-surface);
+            margin: 0;
+            padding: 0;
+            color: white;
+            overflow: hidden;
+        }
+
+        #map {
+            height: 100vh;
+            width: 100vw;
+            z-index: 1;
+            display: none;
+        }
+
+        #login-screen {
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at center, #2e2a3d 0%, #1c1b1f 100%);
+            z-index: 2000;
+            position: fixed;
+            padding: 20px;
+        }
+
+        .input-field {
+            background: var(--m3-surface-variant);
+            border: 2px solid transparent;
+            border-radius: 16px;
+            padding: 16px 20px;
+            color: white;
+            width: 100%;
+            max-width: 320px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+            outline: none;
+        }
+
+        .input-field:focus {
+            border-color: var(--m3-primary);
+        }
+
+        .start-btn {
+            background: var(--m3-primary);
+            color: var(--m3-on-primary);
+            padding: 16px 32px;
+            border-radius: 28px;
+            font-weight: 700;
+            width: 100%;
+            max-width: 320px;
+            transition: transform 0.2s, opacity 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .start-btn:disabled { opacity: 0.5; }
+
+        .custom-div-icon {
+            background: none;
+            border: none;
+        }
+
+        .marker-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .marker-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 18px;
+            border: 2px solid var(--m3-primary);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            background: white;
+            overflow: hidden;
+            z-index: 10;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .marker-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .vibe-wrapper {
+            position: absolute;
+            left: 60px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            z-index: 5;
+            pointer-events: auto;
+        }
+
+        .user-name-label {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--m3-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+            background: rgba(28, 27, 31, 0.8);
+            padding: 1px 6px;
+            border-radius: 4px;
+        }
+
+        .vibe-bubble {
+            background: var(--m3-primary);
+            color: var(--m3-on-primary);
+            padding: 8px 16px;
+            border-radius: 4px 16px 16px 16px;
+            font-weight: 700;
+            font-size: 14px;
+            min-width: 40px;
+            max-width: 200px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            white-space: normal;
+            word-wrap: break-word;
+        }
+
+        .confirm-btn {
+            background: #ffffff;
+            color: #381E72;
+            width: 36px;
+            height: 36px;
+            border-radius: 12px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            border: none;
+            margin-left: 8px;
+        }
+
+        .vibe-pulse {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            border-radius: 18px;
+            background: var(--m3-primary);
+            opacity: 0.4;
+            animation: pulse 3s infinite;
+            z-index: 1;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.4; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+
+        .bottom-nav {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            display: none;
+            gap: 12px;
+        }
+
+        .top-controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: none;
+        }
+
+        .ghost-btn {
+            width: 50px;
+            height: 50px;
+            background: rgba(28, 27, 31, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255,255,255,0.1);
+            color: white;
+        }
+
+        .ghost-btn.active {
+            background: #ffffff;
+            color: #000000;
+        }
+
+        .vibe-btn-container {
+            height: 56px;
+            width: 56px;
+            background: var(--m3-primary);
+            color: var(--m3-on-primary);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            transition: width 0.4s;
+            cursor: pointer;
+        }
+
+        .vibe-btn-container:hover { width: 170px; }
+
+        .vibe-btn-icon {
+            width: 56px;
+            height: 56px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .vibe-btn-text {
+            opacity: 0;
+            white-space: nowrap;
+            font-weight: 700;
+            transition: opacity 0.3s;
+            padding-right: 20px;
+        }
+
+        .vibe-btn-container:hover .vibe-btn-text { opacity: 1; }
+
+        .m3-fab-secondary {
+            width: 56px;
+            height: 56px;
+            background: #49454F;
+            color: white;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            border: none;
+        }
+    </style>
+</head>
+<body>
+
+    <input type="file" id="avatar-upload" accept="image/*" class="hidden" style="display:none">
+
+    <div id="login-screen">
+        <div class="mb-10 text-center">
+            <div class="w-20 h-20 bg-[#D0BCFF] rounded-[28px] flex items-center justify-center mx-auto mb-4 text-[#381E72]">
+                <i data-lucide="map-pin" class="w-10 h-10"></i>
+            </div>
+            <h1 class="text-4xl font-bold mb-2">VibeMap</h1>
+            <p class="text-gray-400">Wie sollen dich andere nennen?</p>
+        </div>
+        <div class="w-full max-w-xs flex flex-col gap-4">
+            <input type="text" id="username-input" class="input-field" placeholder="Dein Name..." maxlength="15">
+            <button id="start-btn" class="start-btn">
+                <span>Karte öffnen</span>
+                <i data-lucide="arrow-right" class="w-5 h-5"></i>
+            </button>
+        </div>
+    </div>
+
+    <div id="map"></div>
+
+    <div id="top-ui" class="top-controls">
+        <button id="ghost-toggle" class="ghost-btn">
+            <i data-lucide="ghost" class="w-6 h-6"></i>
+        </button>
+    </div>
+
+    <div id="controls" class="bottom-nav">
+        <div class="vibe-btn-container" onclick="window.startVibeEditing()">
+            <div class="vibe-btn-icon">
+                <i data-lucide="sparkles" class="w-6 h-6"></i>
+            </div>
+            <span class="vibe-btn-text">Vibe teilen</span>
+        </div>
+        <button onclick="window.centerMap()" class="m3-fab-secondary">
+            <i data-lucide="navigation" class="w-6 h-6"></i>
+        </button>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "AIzaSyDRD776WhMUUs53v-9vcd9jfsvNYeFySMM",
+            authDomain: "maps-4ee5e.firebaseapp.com",
+            projectId: "maps-4ee5e",
+            storageBucket: "maps-4ee5e.firebasestorage.app",
+            messagingSenderId: "344311718901",
+            appId: "1:344311718901:web:a02fd15a655393e37d36bc"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : "maps-4ee5e";
+
+        let map, selfMarker, user;
+        let otherMarkers = {};
+        let isGhost = false;
+        let lastRealPos = null;
+
+        let localName = localStorage.getItem('vibe_name') || '';
+        let localAvatar = localStorage.getItem('vibe_avatar_base64') || `https://api.dicebear.com/7.x/avataaars/svg?seed=${Math.random()}`;
+
+        lucide.createIcons();
+
+        const loginScreen = document.getElementById('login-screen');
+        const startBtn = document.getElementById('start-btn');
+        const usernameInput = document.getElementById('username-input');
+
+        if (localName) usernameInput.value = localName;
+
+        startBtn.onclick = async () => {
+            const name = usernameInput.value.trim();
+            if (!name) return;
+            localName = name;
+            localStorage.setItem('vibe_name', name);
+            startBtn.disabled = true;
+
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (err) {
+                console.error("Auth Error:", err);
+                startBtn.disabled = false;
+            }
+        };
+
+        onAuthStateChanged(auth, (u) => {
+            if (u && localName) {
+                user = u;
+                showMapUI();
+            }
+        });
+
+        function showMapUI() {
+            loginScreen.style.display = 'none';
+            document.getElementById('map').style.display = 'block';
+            document.getElementById('controls').style.display = 'flex';
+            document.getElementById('top-ui').style.display = 'block';
+            initMap();
+            startLocationTracking();
+            listenForOthers();
+        }
+
+        function initMap() {
+            if (map) return;
+            map = L.map('map', { zoomControl: false, attributionControl: false, maxZoom: 18 }).setView([51.1657, 10.4515], 6);
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18 }).addTo(map);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', { pane: 'shadowPane' }).addTo(map);
+        }
+
+        function startLocationTracking() {
+            if (!navigator.geolocation) return;
+            navigator.geolocation.watchPosition((pos) => {
+                const { latitude, longitude } = pos.coords;
+                lastRealPos = { lat: latitude, lng: longitude };
+                if (!isGhost) updateUIPosition(latitude, longitude);
+            }, (err) => console.warn("Geo Error:", err), { 
+                enableHighAccuracy: true,
+                timeout: 5000,
+                maximumAge: 0 
+            });
+        }
+
+        function updateUIPosition(lat, lng) {
+            if (!user) return;
+            
+            if (!selfMarker) {
+                selfMarker = createMarker(lat, lng, { uid: user.uid, displayName: localName, photoURL: localAvatar }, true);
+                map.setView([lat, lng], 17);
+            } else {
+                selfMarker.setLatLng([lat, lng]);
+            }
+            updateFirebase(lat, lng);
+        }
+
+        async function updateFirebase(lat, lng) {
+            if (!user || !lat || !lng) return;
+            
+            const vibeDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'vibes', user.uid);
+            
+            try {
+                await setDoc(vibeDocRef, {
+                    lat: lat,
+                    lng: lng,
+                    vibe: document.getElementById('vibe-bubble')?.innerText || "Ich bin hier!",
+                    userName: isGhost ? "Geist" : localName,
+                    photoURL: isGhost ? "ghost" : localAvatar,
+                    lastUpdate: Date.now()
+                }, { merge: true });
+            } catch (e) {
+                console.error("Firestore Write Error:", e);
+            }
+        }
+
+        function listenForOthers() {
+            if (!user) return;
+            const vibesRef = collection(db, 'artifacts', appId, 'public', 'data', 'vibes');
+            
+            onSnapshot(query(vibesRef), (snapshot) => {
+                snapshot.docChanges().forEach((change) => {
+                    const data = change.doc.data();
+                    const uid = change.doc.id;
+                    
+                    if (uid === user.uid) return;
+
+                    if (change.type === "removed") {
+                        if (otherMarkers[uid]) { 
+                            map.removeLayer(otherMarkers[uid]); 
+                            delete otherMarkers[uid]; 
+                        }
+                    } else {
+                        if (!data.lat || !data.lng) return;
+
+                        if (otherMarkers[uid]) {
+                            otherMarkers[uid].setLatLng([data.lat, data.lng]);
+                            updateMarkerUI(uid, data);
+                        } else {
+                            otherMarkers[uid] = createMarker(data.lat, data.lng, { uid, displayName: data.userName, photoURL: data.photoURL }, false, data.vibe);
+                        }
+                    }
+                });
+            }, (err) => {
+                console.error("Firestore Listen Error:", err);
+            });
+        }
+
+        function updateMarkerUI(uid, data) {
+            const container = document.querySelector(`.marker-${uid}`);
+            if (!container) return;
+            
+            const avatarDiv = container.querySelector('.marker-avatar');
+            const nameLabel = container.querySelector('.user-name-label');
+            const bubble = document.getElementById(`bubble-${uid}`);
+
+            if (data.photoURL === "ghost") {
+                avatarDiv.innerHTML = '<span class="text-2xl">👻</span>';
+            } else {
+                avatarDiv.innerHTML = `<img src="${data.photoURL}" />`;
+            }
+            if (nameLabel) nameLabel.innerText = data.userName;
+            if (bubble) bubble.innerText = data.vibe;
+        }
+
+        document.getElementById('ghost-toggle').onclick = function() {
+            if (!user) return;
+            isGhost = !isGhost;
+            this.classList.toggle('active', isGhost);
+            
+            const selfContainer = document.querySelector('.marker-self');
+            if (!selfContainer) return;
+            
+            const avatarDiv = selfContainer.querySelector('.marker-avatar');
+            const nameLabel = selfContainer.querySelector('.user-name-label');
+
+            if (isGhost) {
+                const offsetLat = (Math.random() - 0.5) * 0.005;
+                const offsetLng = (Math.random() - 0.5) * 0.005;
+                const gLat = (lastRealPos?.lat || 51.1) + offsetLat;
+                const gLng = (lastRealPos?.lng || 10.4) + offsetLng;
+                avatarDiv.innerHTML = '<span class="text-2xl">👻</span>';
+                nameLabel.innerText = "Geist";
+                updateUIPosition(gLat, gLng);
+            } else {
+                avatarDiv.innerHTML = `<img src="${localAvatar}" />`;
+                nameLabel.innerText = localName;
+                if (lastRealPos) updateUIPosition(lastRealPos.lat, lastRealPos.lng);
+            }
+        };
+
+        window.triggerAvatarUpload = () => { if (!isGhost) document.getElementById('avatar-upload').click(); };
+
+        document.getElementById('avatar-upload').onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 128;
+                    const MAX_HEIGHT = 128;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > MAX_WIDTH) {
+                            height *= MAX_WIDTH / width;
+                            width = MAX_WIDTH;
+                        }
+                    } else {
+                        if (height > MAX_HEIGHT) {
+                            width *= MAX_HEIGHT / height;
+                            height = MAX_HEIGHT;
+                        }
+                    }
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    localAvatar = canvas.toDataURL('image/jpeg', 0.7);
+                    localStorage.setItem('vibe_avatar_base64', localAvatar);
+                    
+                    const selfImg = document.querySelector('.marker-self img');
+                    if (selfImg) selfImg.src = localAvatar;
+                    updateFirebase(lastRealPos?.lat, lastRealPos?.lng);
+                };
+                img.src = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+        };
+
+        function createMarker(lat, lng, uData, isSelf, initialVibe = "Ich bin hier!") {
+            const isGhostUser = uData.photoURL === "ghost";
+            const avatarContent = isGhostUser ? '<span class="text-2xl">👻</span>' : `<img src="${uData.photoURL}" style="width:100%; height:100%; object-fit:cover;" />`;
+            
+            const icon = L.divIcon({
+                className: 'custom-div-icon',
+                html: `
+                    <div class="marker-container ${isSelf ? 'marker-self' : `marker-${uData.uid}`}">
+                        ${isSelf ? '<div class="vibe-pulse"></div>' : ''}
+                        <div class="marker-avatar" onclick="${isSelf ? 'window.triggerAvatarUpload()' : ''}">
+                            ${avatarContent}
+                        </div>
+                        <div class="vibe-wrapper">
+                            <span class="user-name-label">${uData.displayName}</span>
+                            <div class="flex items-center">
+                                <div id="${isSelf ? 'vibe-bubble' : `bubble-${uData.uid}`}" class="vibe-bubble">
+                                    ${initialVibe}
+                                </div>
+                                ${isSelf ? `<button id="confirm-btn" class="confirm-btn"><i data-lucide="check" class="w-5 h-5"></i></button>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `,
+                iconSize: [250, 70], iconAnchor: [25, 35]
+            });
+
+            const marker = L.marker([lat, lng], { icon }).addTo(map);
+            
+            if (isSelf) {
+                document.addEventListener('click', (e) => {
+                    const btn = e.target.closest('#confirm-btn');
+                    if (btn) {
+                        const bubble = document.getElementById('vibe-bubble');
+                        bubble.contentEditable = "false";
+                        btn.style.display = 'none';
+                        updateFirebase(lastRealPos?.lat, lastRealPos?.lng);
+                    }
+                });
+            }
+            
+            lucide.createIcons();
+            return marker;
+        }
+
+        window.startVibeEditing = function() {
+            if (!selfMarker) return;
+            const bubble = document.getElementById('vibe-bubble');
+            const btn = document.getElementById('confirm-btn');
+            map.flyTo(selfMarker.getLatLng(), 18);
+            
+            // Lösche den alten Inhalt vor der Bearbeitung
+            bubble.innerText = "";
+            bubble.contentEditable = "true";
+            btn.style.display = 'flex';
+            bubble.focus();
+        };
+
+        window.centerMap = () => { if (selfMarker) map.flyTo(selfMarker.getLatLng(), 17); };
+    </script>
+</body>
+</html>
